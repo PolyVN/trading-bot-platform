@@ -2,71 +2,76 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository Purpose
+## Project Overview
 
-This is the **architecture documentation repository** for the Polymarket Trading Bot System. It contains 32 design docs covering a multi-repo system (5 repos, 3 services, 3 VPS deployment). No source code exists yet — the docs serve as the implementation blueprint.
+Polymarket event-driven trading bot system. Multi-repo architecture with 5 repositories, 3 VPS deployment. This repo (`polymarketjs`) is the root project containing architecture documentation and orchestration.
 
-## Documentation Structure
+## Architecture (3 VPS, 5 Repos)
 
 ```
-docs/
-├── 00-overview.md                     # System architecture, decisions log, communication flow
-├── 01-trading-engine/                 # 12 files: core modules, strategies, feeds, execution, risk
-├── 02-cms-backend/                    # 5 files: API routes, DB schemas, RBAC, queues, websocket
-├── 03-cms-frontend/                   # 3 files: architecture, pages, realtime hooks
-├── 04-communication/                  # 3 files: Redis Pub/Sub, BullMQ, WebSocket protocol
-├── 05-infrastructure/                 # 4 files: Docker, deployment, monitoring, security
-├── 06-shared-types/                   # 1 file: all TypeScript interfaces
-└── 07-implementation/                 # 2 files: roadmap (5 phases), verification checklist
+VPS 1: Trading Engine (Node.js/TS) ──┐
+VPS 2: CMS Backend (Fastify) +       ├── VPS 3: MongoDB + Redis
+       CMS Frontend (Next.js 15) ────┘
 ```
 
-## System Architecture (Summary)
+| Repo | Purpose |
+|------|---------|
+| `polymarket-shared-types` | `@polymarket/shared-types` npm package - all TypeScript interfaces |
+| `polymarket-trading-engine` | Event-driven bot execution, strategy plugins, data feeds |
+| `polymarket-cms-backend` | Fastify REST API, BullMQ workers, Socket.IO relay |
+| `polymarket-cms-frontend` | Next.js 15 dashboard with shadcn/ui, realtime via Socket.IO |
+| `polymarket-docker` | Docker Compose per VPS (vps1-trading, vps2-cms, vps3-database) |
 
-**3 services across 3 VPS** connected via private network:
-- **VPS 1 - Trading Engine** (Node.js/TypeScript): Bot execution, order management, risk, feeds
-- **VPS 2 - CMS** (Fastify backend + Next.js 15 frontend): Dashboard, API, BullMQ workers
-- **VPS 3 - Database** (MongoDB + Redis): Shared data layer, Pub/Sub, queues
+## Communication Flow
 
-**Communication**: TE ↔ CMS via Redis Pub/Sub (realtime events) + BullMQ (persistence jobs). CMS Backend ↔ Frontend via Socket.IO + REST API.
+- **Trading Engine → CMS Backend**: Redis Pub/Sub (realtime) + BullMQ (persistent)
+- **CMS Backend → Trading Engine**: Redis Pub/Sub with `{engineId}` routing
+- **CMS Backend → CMS Frontend**: Socket.IO WebSocket + REST API
+- **Persistence**: Only CMS Backend writes to MongoDB (via BullMQ workers). Trading Engine never touches DB directly.
 
-**5 repos**: `polymarket-shared-types`, `polymarket-trading-engine`, `polymarket-cms-backend`, `polymarket-cms-frontend`, `polymarket-docker`
+## Key Architectural Patterns
 
-## Key Technical Decisions
+**Event-driven trading engine**: Single process async, each bot is a BotRunner instance with its own AbortController. Hybrid tick model: event-driven (`onFeedUpdate`) for fast reaction + periodic (`onTick`) for maintenance.
 
-- **Decimal precision**: `decimal.js` for all monetary values, stored as strings in DB
-- **Events**: TypedEventEmitter (internal), Redis Pub/Sub (inter-service)
-- **Errors**: `PolyError` hierarchy, never plain `Error`
-- **Logging**: Pino structured JSON, never `console.log`
-- **Strategies**: Plugin-based with hot-reload (dynamic import)
-- **Paper trading**: Default ON for safety
-- **Risk management**: Fail-closed (if risk check errors, reject the order)
-- **Feed sharing**: FeedManager singleton with reference counting
-- **Bot model**: Hybrid tick (event-driven + periodic maintenance)
-- **Market data cache**: 3-tier (Hot: in-memory, Warm: Redis TTL, Cold: MongoDB permanent)
+**Shared data feeds (FeedManager)**: Singleton with reference counting. Multiple bots trading the same market share 1 WebSocket connection. `subscribe()` increments refCount; `unsubscribe()` decrements; feed closes at refCount=0.
 
-## Documentation Conventions
+**Strategy plugin system**: `BaseStrategy` abstract class. Builtin strategies in `src/strategies/builtin/`. External plugins hot-reloaded via dynamic `import()` from `plugins/` directory without engine restart.
 
-- All docs are in **English only** (no Vietnamese mixing)
-- Edge cases follow the format: **Scenario → Impact → Solution** with TypeScript code examples
-- Every module doc includes an "Edge Cases & Error Handling" section
-- Interface definitions use TypeScript notation
-- Architecture diagrams use ASCII art
+**Multi-engine horizontal scaling**: Each TE instance has a unique `engineId`. Redis HSET for engine registry. CMS routes commands to `cms:bot:command:{engineId}`. Bot assignment stored in MongoDB.
 
-## Working With These Docs
+**Paper trading**: Same data feeds, simulated order execution via `PaperExecutor` (same interface as `OrderExecutor`). Flag `isPaper` propagated throughout orders, trades, PnL.
 
-| Task | Start reading |
-|------|--------------|
-| Understand the full system | `docs/00-overview.md` |
-| Trading Engine internals | `docs/01-trading-engine/architecture.md` |
-| Database schemas & API | `docs/02-cms-backend/database-schemas.md`, `api-routes.md` |
-| Frontend pages & realtime | `docs/03-cms-frontend/pages.md`, `realtime.md` |
-| Inter-service communication | `docs/04-communication/redis-pubsub.md` |
-| Deployment & Docker | `docs/05-infrastructure/docker-compose.md` |
-| All TypeScript interfaces | `docs/06-shared-types/type-definitions.md` |
-| Implementation plan | `docs/07-implementation/roadmap.md` |
+**Risk management**: Auto-stop → `RISK_STOPPED` status (requires manual resume from CMS). Telegram alert + CMS red banner. Checks: maxDailyLoss, maxDrawdown, maxPositionSize, maxOrdersPerMinute.
 
-## Autonomy Rules
+## Important Conventions
 
-- Fix typos, formatting issues, and broken cross-references in docs immediately.
-- When adding new docs, follow existing structure: overview section, interface definitions, edge cases section.
-- Prioritize: safety (paper trade defaults) > correctness (decimal precision) > observability (logging/metrics).
+- All Redis Pub/Sub payloads include `engineId` and `timestamp`
+- Channel names defined as shared constants in `@polymarket/shared-types` (never hardcode strings)
+- Private keys encrypted with AES-256-GCM, `ENCRYPTION_KEY` from env
+- Wallet system uses Polymarket proxy wallets: proxy address + private key → CLOB credentials
+- Order status never goes backwards (use STATUS_ORDER map for comparison)
+- Pub/Sub payloads must stay < 10KB; large data goes through BullMQ
+- Use separate Redis connections for subscriber vs publisher vs cache
+- Bot states: IDLE → STARTING → RUNNING → PAUSING/PAUSED → STOPPING → STOPPED, plus RISK_STOPPED and ERROR
+- RBAC roles: admin (full), operator (manage bots/orders, no users/keys), viewer (read-only)
+
+## Documentation
+
+Full architecture docs are in `docs/` organized by service:
+- `docs/00-overview.md` - System overview, decisions log
+- `docs/01-trading-engine/` - All TE modules (feed-manager, strategies, risk, paper trading, etc.)
+- `docs/02-cms-backend/` - API routes, database schemas, RBAC, queue workers
+- `docs/03-cms-frontend/` - Pages, realtime hooks
+- `docs/04-communication/` - Redis Pub/Sub channels, BullMQ queues, WebSocket protocol
+- `docs/05-infrastructure/` - Docker Compose, deployment, monitoring, security
+- `docs/06-shared-types/` - All TypeScript interfaces
+- `docs/07-implementation/` - Roadmap, verification checklist
+
+## Tech Stack
+
+| Service | Stack |
+|---------|-------|
+| Trading Engine | Node.js 20+, TypeScript, ioredis, bullmq, pino, prom-client, @polymarket/clob-client |
+| CMS Backend | Fastify, Mongoose (MongoDB), Socket.IO, BullMQ workers, NextAuth-compatible JWT |
+| CMS Frontend | Next.js 15, shadcn/ui, TanStack Query v5, TanStack Table, Recharts, Socket.IO Client, NextAuth.js v5 |
+| Infrastructure | Docker Compose, Redis 7, MongoDB 7, Prometheus, Grafana, Caddy/nginx reverse proxy |
