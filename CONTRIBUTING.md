@@ -4,49 +4,69 @@
 
 This is a multi-repo project. See [docs/00-overview.md](docs/00-overview.md) for full architecture.
 
-| Repo | Purpose |
-|------|---------|
-| `polymarket-trading-engine` | Trading engine, exchange adapters, strategies |
-| `polymarket-cms-backend` | REST API, queue workers, Socket.IO relay |
-| `polymarket-cms-frontend` | Next.js dashboard |
-| `polymarket-shared-types` | Shared TypeScript interfaces (`@polymarket/shared-types`) |
-| `polymarket-docker` | Docker Compose per VPS |
+| Repo | Language | Purpose |
+|------|----------|---------|
+| `trading-engine` | **Rust** | Trading engine, exchange adapters, strategies |
+| `trading-cms-backend` | TypeScript | REST API, queue workers, Socket.IO relay |
+| `trading-cms-frontend` | TypeScript | Next.js dashboard |
+| `trading-shared-types` | JSON Schema | Source of truth → codegen to TypeScript (`@polyvn/shared-types`) + Rust (`polyvn-shared-types`) |
+| `trading-docker` | YAML | Docker Compose per VPS |
 
 ## Development Setup
 
 1. Clone all repos into the same parent directory
-2. Start MongoDB + Redis locally (or use `polymarket-docker/vps3-database`)
-3. Install dependencies in each repo: `npm install`
-4. Run each service in dev mode: `npm run dev`
+2. Start MongoDB + Redis locally (or use `trading-docker/vps3-database`)
+3. **Trading Engine (Rust)**:
+   - Install Rust toolchain: `rustup install stable`
+   - Build: `cd trading-engine && cargo build`
+   - Run: `cargo run` (or `cargo run --release` for optimized)
+   - Test: `cargo test`
+4. **Shared Types**:
+   - `cd trading-shared-types && npm install && npm run generate`
+   - Generates TypeScript (`dist/`) and Rust (`generated/`) types from JSON Schema
+5. **CMS Backend/Frontend (Node.js)**:
+   - `npm install && npm run dev` in each repo
 
 ## Code Conventions
 
-- **TypeScript** for all services (strict mode)
+### Trading Engine (Rust)
+- **Rust 2021 edition**, async with `tokio`
+- **`tracing`** for structured JSON logging (`tracing-subscriber` with JSON formatter)
+- **`serde`** + `serde_json` for serialization (all Redis payloads)
+- **`rust_decimal`** for precise financial calculations (never use `f64` for money)
+- Naming: `snake_case` for fields/functions, `PascalCase` for types/traits
+- Error handling: `thiserror` for library errors, `anyhow` for application-level
+- Tests: built-in `#[cfg(test)]` modules + integration tests in `tests/`
+
+### CMS Backend/Frontend (TypeScript)
+- **TypeScript** strict mode
 - **Pino** for structured JSON logging
 - **Zod** for API request validation
 - **Vitest** for unit/integration tests
-- Shared types go in `@polymarket/shared-types` (never duplicate interfaces across repos)
-- Redis channel names defined as constants (never hardcode strings)
-- All credentials encrypted with AES-256-GCM
+
+### Cross-language
+- Shared types defined as JSON Schema in `trading-shared-types` (never duplicate across repos)
+- Redis channel names defined as constants (codegen'd from JSON Schema)
+- All credentials encrypted with AES-256-GCM (`aes-gcm` crate in Rust, `crypto` in Node.js)
 
 ## Adding a New Exchange
 
-1. Create adapter directory: `src/exchanges/{exchange}/`
-2. Implement interfaces: `IOrderExecutor`, `IFeedProvider`, `IWalletAdapter`, `IPositionAdapter`
+1. Create adapter module: `src/exchanges/{exchange}/`
+2. Implement traits: `OrderExecutor`, `FeedProvider`, `WalletAdapter`, `PositionAdapter`
 3. Register in `ExchangeRegistry` at engine startup
 4. Add exchange-specific docs in `docs/02-exchanges/{exchange}.md`
-5. Update shared types: add to `Exchange` union type
+5. Update shared types: add to `Exchange` enum in JSON Schema, re-run codegen
 6. CMS auto-discovers via engine registration (no CMS changes needed for basic support)
 
 See [Exchange Abstraction](docs/01-trading-engine/exchange-abstraction.md) and [Exchange Registry](docs/02-exchanges/exchange-registry.md) for details.
 
 ## Adding a New Strategy
 
-1. Create strategy in `src/strategies/builtin/{name}/index.ts`
-2. Extend `BaseStrategy` abstract class
-3. Define `supportedExchanges`, `configSchema` (JSON Schema for CMS form)
+1. Create strategy module in `src/strategies/builtin/{name}/mod.rs`
+2. Implement `Strategy` trait
+3. Define `supported_exchanges()`, `config_schema()` (JSON Schema for CMS form)
 4. Register in `StrategyRegistry`
-5. Or: place in `plugins/` directory for hot-reload without engine restart
+5. Recompile engine: `cargo build --release`
 
 See [Strategies](docs/01-trading-engine/strategies.md) for details.
 
