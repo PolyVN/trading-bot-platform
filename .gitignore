@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+build/
+.next/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Credentials / secrets
+*.pem
+*.key
+credentials.json
+
+# Redis / MongoDB data (local dev)
+data/
+
+# Coverage
+coverage/
+
+# Temporary
+tmp/
+.tmp/
