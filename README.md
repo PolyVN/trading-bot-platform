@@ -1,11 +1,11 @@
 # Multi-Exchange Trading Bot System
 
-[![Rust](https://img.shields.io/badge/Trading_Engine-Rust_2024-000000?logo=rust&logoColor=white)](docs/01-trading-engine/architecture.md)
-[![TypeScript](https://img.shields.io/badge/CMS-TypeScript_5.9-3178C6?logo=typescript&logoColor=white)](docs/03-cms-backend/architecture.md)
-[![Next.js](https://img.shields.io/badge/Frontend-Next.js_16-000000?logo=next.js&logoColor=white)](docs/04-cms-frontend/architecture.md)
-[![Redis](https://img.shields.io/badge/Cache-Redis_7.4-DC382D?logo=redis&logoColor=white)](docs/06-infrastructure/docker-compose.md)
-[![MongoDB](https://img.shields.io/badge/Database-MongoDB_8.0-47A248?logo=mongodb&logoColor=white)](docs/03-cms-backend/database-schemas.md)
-[![Docker](https://img.shields.io/badge/Deploy-Docker_Compose-2496ED?logo=docker&logoColor=white)](docs/06-infrastructure/docker-compose.md)
+[![Rust](https://img.shields.io/badge/Trading_Engine-Rust_2024-000000?logo=rust&logoColor=white)](https://github.com/PolyVN/trading-docs/blob/main/01-trading-engine/architecture.md)
+[![TypeScript](https://img.shields.io/badge/CMS-TypeScript_5.9-3178C6?logo=typescript&logoColor=white)](https://github.com/PolyVN/trading-docs/blob/main/03-cms-backend/architecture.md)
+[![Next.js](https://img.shields.io/badge/Frontend-Next.js_16-000000?logo=next.js&logoColor=white)](https://github.com/PolyVN/trading-docs/blob/main/04-cms-frontend/architecture.md)
+[![Redis](https://img.shields.io/badge/Cache-Redis_7.4-DC382D?logo=redis&logoColor=white)](https://github.com/PolyVN/trading-docs/blob/main/06-infrastructure/docker-compose.md)
+[![MongoDB](https://img.shields.io/badge/Database-MongoDB_8.0-47A248?logo=mongodb&logoColor=white)](https://github.com/PolyVN/trading-docs/blob/main/03-cms-backend/database-schemas.md)
+[![Docker](https://img.shields.io/badge/Deploy-Docker_Compose-2496ED?logo=docker&logoColor=white)](https://github.com/PolyVN/trading-docs/blob/main/06-infrastructure/docker-compose.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Event-driven trading bot platform supporting **Polymarket** (on-chain prediction markets) and **OKX** (spot/futures/perpetuals), with a unified CMS dashboard and cross-exchange arbitrage support.
@@ -66,88 +66,79 @@ graph LR
 
 ## Repositories
 
-This root repo (`trading-system`) contains architecture documentation and orchestration only. Implementation lives across 5 sub-repos:
+This root repo contains orchestration and submodules. Implementation lives across sub-repos:
 
-| Repo | Description | Clone |
-|------|-------------|-------|
-| [`trading-shared-types`](https://github.com/PolyVN/trading-shared-types) | JSON Schema (source of truth) → `@polyvn/shared-types` (npm) + `polyvn-shared-types` (Rust crate) | `git@github.com:PolyVN/trading-shared-types.git` |
-| [`trading-engine`](https://github.com/PolyVN/trading-engine) | Rust trading engine: bot execution, exchange adapters, strategies | `git@github.com:PolyVN/trading-engine.git` |
-| [`trading-cms-backend`](https://github.com/PolyVN/trading-cms-backend) | Node.js/TypeScript: Fastify REST API, BullMQ workers, Socket.IO relay | `git@github.com:PolyVN/trading-cms-backend.git` |
-| [`trading-cms-frontend`](https://github.com/PolyVN/trading-cms-frontend) | Next.js 16 dashboard, exchange selector, realtime UI | `git@github.com:PolyVN/trading-cms-frontend.git` |
-| [`trading-docker`](https://github.com/PolyVN/trading-docker) | Docker Compose per service (database, trading-engine, cms) | `git@github.com:PolyVN/trading-docker.git` |
+| Repo | Path | Description |
+|------|------|-------------|
+| [`trading-docs`](https://github.com/PolyVN/trading-docs) | `docs/` (submodule, private) | Architecture documentation (38 files) |
+| [`trading-shared-types`](https://github.com/PolyVN/trading-shared-types) | `packages/shared-types/` (submodule) | JSON Schema → `@polyvn/shared-types` (npm) + `polyvn-shared-types` (Rust crate) |
+| [`trading-engine`](https://github.com/PolyVN/trading-engine) | — | Rust trading engine: bot execution, exchange adapters, strategies |
+| [`trading-cms-backend`](https://github.com/PolyVN/trading-cms-backend) | — | Node.js/TypeScript: Fastify REST API, BullMQ workers, Socket.IO relay |
+| [`trading-cms-frontend`](https://github.com/PolyVN/trading-cms-frontend) | — | Next.js 16 dashboard, exchange selector, realtime UI |
+| [`trading-docker`](https://github.com/PolyVN/trading-docker) | — | Docker Compose per service (database, trading-engine, cms) |
 
 ## Documentation
 
-Full architecture docs in [`docs/`](docs/00-overview.md):
+> Architecture docs are in the private [`trading-docs`](https://github.com/PolyVN/trading-docs) submodule (`docs/`). Clone with `--recurse-submodules` to access.
 
 | Section | Contents |
 |---------|----------|
-| [00 - Overview](docs/00-overview.md) | System overview, exchange support matrix, decisions log |
-| [01 - Trading Engine](docs/01-trading-engine/) | Exchange abstraction, feeds, execution, risk, strategies, paper trading |
-| [02 - Exchanges](docs/02-exchanges/) | Registry, Polymarket, OKX adapters |
-| [03 - CMS Backend](docs/03-cms-backend/) | API routes, database schemas, RBAC, queue workers |
-| [04 - CMS Frontend](docs/04-cms-frontend/) | Pages, exchange selector, realtime hooks |
-| [05 - Communication](docs/05-communication/) | Redis Pub/Sub channels, BullMQ queues, WebSocket protocol |
-| [06 - Infrastructure](docs/06-infrastructure/) | Docker Compose, deployment, monitoring, security |
-| [07 - Shared Types](docs/07-shared-types/) | JSON Schema → TypeScript + Rust codegen |
-| [08 - Implementation](docs/08-implementation/) | Roadmap, verification checklist |
-| [Troubleshooting](docs/troubleshooting.md) | Common errors and debugging guide |
+| [00 - Overview](https://github.com/PolyVN/trading-docs/blob/main/00-overview.md) | System overview, exchange support matrix, decisions log |
+| [01 - Trading Engine](https://github.com/PolyVN/trading-docs/tree/main/01-trading-engine) | Exchange abstraction, feeds, execution, risk, strategies, paper trading |
+| [02 - Exchanges](https://github.com/PolyVN/trading-docs/tree/main/02-exchanges) | Registry, Polymarket, OKX adapters |
+| [03 - CMS Backend](https://github.com/PolyVN/trading-docs/tree/main/03-cms-backend) | API routes, database schemas, RBAC, queue workers |
+| [04 - CMS Frontend](https://github.com/PolyVN/trading-docs/tree/main/04-cms-frontend) | Pages, exchange selector, realtime hooks |
+| [05 - Communication](https://github.com/PolyVN/trading-docs/tree/main/05-communication) | Redis Pub/Sub channels, BullMQ queues, WebSocket protocol |
+| [06 - Infrastructure](https://github.com/PolyVN/trading-docs/tree/main/06-infrastructure) | Docker Compose, deployment, monitoring, security |
+| [07 - Shared Types](https://github.com/PolyVN/trading-docs/tree/main/07-shared-types) | JSON Schema → TypeScript + Rust codegen |
+| [08 - Implementation](https://github.com/PolyVN/trading-docs/tree/main/08-implementation) | Roadmap, verification checklist |
+| [Troubleshooting](https://github.com/PolyVN/trading-docs/blob/main/troubleshooting.md) | Common errors and debugging guide |
 
 ## Quick Start
 
 ```bash
-# Clone all repos into a parent directory
-mkdir polyvn && cd polyvn
+# Clone with all submodules (docs + shared-types)
+git clone --recurse-submodules git@github.com:PolyVN/trading-bot-platform.git
+cd trading-bot-platform
 
-git clone git@github.com:PolyVN/trading-system.git
-git clone git@github.com:PolyVN/trading-shared-types.git
-git clone git@github.com:PolyVN/trading-engine.git
-git clone git@github.com:PolyVN/trading-cms-backend.git
-git clone git@github.com:PolyVN/trading-cms-frontend.git
-git clone git@github.com:PolyVN/trading-docker.git
+# Clone implementation repos
+git clone git@github.com:PolyVN/trading-engine.git packages/trading-engine
+git clone git@github.com:PolyVN/trading-cms-backend.git packages/trading-cms-backend
+git clone git@github.com:PolyVN/trading-cms-frontend.git packages/trading-cms-frontend
+git clone git@github.com:PolyVN/trading-docker.git packages/trading-docker
 ```
 
 > **Important**: Services must be started in order: **Database → Shared Types → Trading Engine → CMS**. The Trading Engine depends on Redis, and the CMS depends on both Redis and MongoDB.
 
 ```bash
 # 1. Start database layer
-cd trading-docker/database
+cd packages/trading-docker/database
 cp .env.example .env        # fill in MongoDB/Redis passwords
 docker compose up -d
-docker compose logs -f --tail=20   # verify MongoDB and Redis are healthy, then Ctrl+C
 
 # 2. Generate shared types (used by engine + cms-backend)
-cd ../../trading-shared-types
+cd ../../shared-types
 npm install && npm run generate   # generates TypeScript + Rust types from JSON Schema
 
-# 3. Build trading engine (Rust)
+# 3. Build and start trading engine
 cd ../trading-engine
 cargo build --release
-
-# 4. Start trading engine
 cd ../trading-docker/trading-engine
-cp .env.example .env        # fill in DB_HOST, REDIS_PASSWORD, ENCRYPTION_KEY
+cp .env.example .env        # fill in REDIS_PASSWORD, ENCRYPTION_KEY
 docker compose up -d
-docker compose logs -f --tail=20   # verify TE registers in Redis, then Ctrl+C
 
-# 5. Start CMS
+# 4. Start CMS
 cd ../cms
-cp .env.example .env        # fill in DB_HOST, passwords, JWT/NextAuth secrets
+cp .env.example .env        # fill in passwords, JWT/NextAuth secrets
 docker compose up -d
-docker compose logs -f --tail=20   # verify CMS Backend connects to Redis + MongoDB
 
-# 6. Verify everything is running
+# 5. Verify everything is running
 curl http://localhost:3001/api/system/health        # CMS Backend health
 curl http://localhost:3001/api/engines              # should list registered TEs
-
-# 7. Add exchange credentials via CMS (not in .env)
-#    Create wallets: POST /api/wallets (Polymarket PK, OKX keys)
-#    Create bots:    POST /api/bots (strategy, exchange, risk limits)
-#    See "Creating Your First Bot" below
 ```
 
 See [`env/`](env/) for `.env.example` templates (infrastructure config only — exchange credentials are managed via CMS).
-See [deployment guide](docs/06-infrastructure/deployment.md) for full setup, firewall rules, and reverse proxy config.
+See [deployment guide](https://github.com/PolyVN/trading-docs/blob/main/06-infrastructure/deployment.md) for full setup, firewall rules, and reverse proxy config.
 
 ## Creating Your First Bot
 
@@ -193,7 +184,7 @@ curl -X POST "http://localhost:3001/api/bots/$BOT_ID/start" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-See [API routes](docs/03-cms-backend/api-routes.md) for full endpoint reference.
+See [API routes](https://github.com/PolyVN/trading-docs/blob/main/03-cms-backend/api-routes.md) for full endpoint reference.
 
 ## License
 
