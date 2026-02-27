@@ -1,5 +1,13 @@
 # Multi-Exchange Trading Bot System
 
+[![Rust](https://img.shields.io/badge/Trading_Engine-Rust_2024-000000?logo=rust&logoColor=white)](docs/01-trading-engine/architecture.md)
+[![TypeScript](https://img.shields.io/badge/CMS-TypeScript_5.9-3178C6?logo=typescript&logoColor=white)](docs/03-cms-backend/architecture.md)
+[![Next.js](https://img.shields.io/badge/Frontend-Next.js_16-000000?logo=next.js&logoColor=white)](docs/04-cms-frontend/architecture.md)
+[![Redis](https://img.shields.io/badge/Cache-Redis_7.4-DC382D?logo=redis&logoColor=white)](docs/06-infrastructure/docker-compose.md)
+[![MongoDB](https://img.shields.io/badge/Database-MongoDB_8.0-47A248?logo=mongodb&logoColor=white)](docs/03-cms-backend/database-schemas.md)
+[![Docker](https://img.shields.io/badge/Deploy-Docker_Compose-2496ED?logo=docker&logoColor=white)](docs/06-infrastructure/docker-compose.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Event-driven trading bot platform supporting **Polymarket** (on-chain prediction markets) and **OKX** (spot/futures/perpetuals), with a unified CMS dashboard and cross-exchange arbitrage support.
 
 ```mermaid
