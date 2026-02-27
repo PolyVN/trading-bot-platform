@@ -72,10 +72,10 @@ This root repo contains orchestration and submodules. Implementation lives acros
 |------|------|-------------|
 | [`trading-docs`](https://github.com/PolyVN/trading-docs) | `docs/` (submodule, private) | Architecture documentation (38 files) |
 | [`trading-shared-types`](https://github.com/PolyVN/trading-shared-types) | `packages/shared-types/` (submodule) | JSON Schema → `@polyvn/shared-types` (npm) + `polyvn-shared-types` (Rust crate) |
-| [`trading-engine`](https://github.com/PolyVN/trading-engine) | — | Rust trading engine: bot execution, exchange adapters, strategies |
-| [`trading-cms-backend`](https://github.com/PolyVN/trading-cms-backend) | — | Node.js/TypeScript: Fastify REST API, BullMQ workers, Socket.IO relay |
+| [`trading-engine`](https://github.com/PolyVN/trading-engine) | `packages/trading-engine/` (submodule) | Rust trading engine: bot execution, exchange adapters, strategies |
+| [`trading-cms-backend`](https://github.com/PolyVN/trading-cms-backend) | `packages/cms-backend/` | Node.js/TypeScript: Fastify REST API, BullMQ workers, Socket.IO relay |
 | [`trading-cms-frontend`](https://github.com/PolyVN/trading-cms-frontend) | — | Next.js 16 dashboard, exchange selector, realtime UI |
-| [`trading-docker`](https://github.com/PolyVN/trading-docker) | — | Docker Compose per service (database, trading-engine, cms) |
+| [`trading-docker`](https://github.com/PolyVN/trading-docker) | `packages/docker/` (submodule) | Docker Compose per service (database, trading-engine, cms) |
 
 ## Documentation
 
