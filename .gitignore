@@ -39,6 +39,9 @@ data/
 # Coverage
 coverage/
 
+# Worktrees
+.worktrees/
+
 # Temporary
 tmp/
 .tmp/
