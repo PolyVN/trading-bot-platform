@@ -1,0 +1,3 @@
+[submodule "packages/shared-types"]
+	path = packages/shared-types
+	url = git@github.com:PolyVN/trading-shared-types.git
