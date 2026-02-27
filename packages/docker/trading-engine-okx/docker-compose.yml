@@ -1,0 +1,49 @@
+# =============================================================================
+# Trading Engine — OKX (Option A: Separate Host)
+# Same Rust binary, different ENGINE_ID and SUPPORTED_EXCHANGES.
+# =============================================================================
+# Usage:
+#   docker compose up -d
+#   docker compose --profile monitoring up -d   # includes Prometheus
+# =============================================================================
+
+services:
+  te-okx:
+    build:
+      context: ../../trading-engine          # → packages/trading-engine
+    container_name: te-okx
+    ports: ["3010:3010"]
+    environment:
+      - ENGINE_ID=${OKX_ENGINE_ID:-te-okx-001}
+      - SUPPORTED_EXCHANGES=okx
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@${DB_HOST}:6379
+      - OKX_ENVIRONMENT=${OKX_ENVIRONMENT:-live}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RUST_LOG=${RUST_LOG:-info}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  prometheus:
+    image: prom/prometheus:v3.2.0
+    container_name: te-okx-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports: ["9090:9090"]
+    restart: unless-stopped
+    profiles: ["monitoring"]
+
+volumes:
+  prometheus_data:

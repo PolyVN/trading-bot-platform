@@ -1,0 +1,81 @@
+# =============================================================================
+# Trading Engine — Polymarket (+ optional OKX co-located)
+# =============================================================================
+# Option A: Single exchange per host (default — only te-polymarket)
+# Option B: Co-located — uncomment te-okx service below
+# Option C: Strategy-isolated — same file, different ENGINE_ID in .env
+#
+# Usage:
+#   docker compose up -d
+#   docker compose --profile monitoring up -d   # includes Prometheus
+# =============================================================================
+
+services:
+  te-polymarket:
+    build:
+      context: ../../trading-engine          # → packages/trading-engine
+    container_name: te-polymarket
+    ports: ["3010:3010"]
+    environment:
+      - ENGINE_ID=${POLYMARKET_ENGINE_ID:-te-polymarket-001}
+      - SUPPORTED_EXCHANGES=polymarket
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@${DB_HOST}:6379
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RUST_LOG=${RUST_LOG:-info}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # --- Option B: OKX co-located on same host ---
+  # Uncomment to run both TEs on the same host
+  # te-okx:
+  #   build:
+  #     context: ../../trading-engine
+  #   container_name: te-okx
+  #   ports: ["3011:3010"]
+  #   environment:
+  #     - ENGINE_ID=${OKX_ENGINE_ID:-te-okx-001}
+  #     - SUPPORTED_EXCHANGES=okx
+  #     - REDIS_URL=redis://:${REDIS_PASSWORD}@${DB_HOST}:6379
+  #     - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+  #     - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+  #     - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+  #     - LOG_LEVEL=${LOG_LEVEL:-info}
+  #     - RUST_LOG=${RUST_LOG:-info}
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 10s
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 512M
+
+  # --- Option A/B: Local Prometheus (scrapes this host's TE) ---
+  # For Option C (strategy-isolated), use central Prometheus on CMS host instead.
+  prometheus:
+    image: prom/prometheus:v3.2.0
+    container_name: te-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports: ["9090:9090"]
+    restart: unless-stopped
+    profiles: ["monitoring"]
+
+volumes:
+  prometheus_data:

@@ -137,7 +137,7 @@ curl http://localhost:3001/api/system/health        # CMS Backend health
 curl http://localhost:3001/api/engines              # should list registered TEs
 ```
 
-See [`env/`](env/) for `.env.example` templates (infrastructure config only — exchange credentials are managed via CMS).
+See [`packages/docker/`](packages/docker/) for `.env.example` templates per service (infrastructure config only — exchange credentials are managed via CMS).
 See [deployment guide](https://github.com/PolyVN/trading-docs/blob/main/06-infrastructure/deployment.md) for full setup, firewall rules, and reverse proxy config.
 
 ## Creating Your First Bot

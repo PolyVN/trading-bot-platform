@@ -1,0 +1,9 @@
+# Prometheus config — OKX Trading Engine host (Option A)
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'te-okx'
+    static_configs:
+      - targets: ['te-okx:3010']
+    metrics_path: /metrics

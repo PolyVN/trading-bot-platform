@@ -1,0 +1,54 @@
+# Prometheus config — CMS host (Option C: Central, scrapes all TE hosts)
+# Update targets with actual TE host IPs when deploying.
+# Hot reload: docker compose exec prometheus kill -SIGHUP 1
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # --- Polymarket strategy engines ---
+  - job_name: 'te-pm-mm'
+    static_configs:
+      - targets: ['10.0.0.1:3010']
+        labels:
+          exchange: 'polymarket'
+          strategy_group: 'market-making'
+    metrics_path: /metrics
+
+  # - job_name: 'te-pm-sig'
+  #   static_configs:
+  #     - targets: ['10.0.0.5:3010']
+  #       labels:
+  #         exchange: 'polymarket'
+  #         strategy_group: 'signal'
+  #   metrics_path: /metrics
+
+  # - job_name: 'te-pm-dca'
+  #   static_configs:
+  #     - targets: ['10.0.0.6:3010']
+  #       labels:
+  #         exchange: 'polymarket'
+  #         strategy_group: 'dca'
+  #   metrics_path: /metrics
+
+  # --- OKX strategy engines ---
+  # - job_name: 'te-okx-mm'
+  #   static_configs:
+  #     - targets: ['10.0.0.4:3010']
+  #       labels:
+  #         exchange: 'okx'
+  #         strategy_group: 'market-making'
+  #   metrics_path: /metrics
+
+  # - job_name: 'te-okx-arb'
+  #   static_configs:
+  #     - targets: ['10.0.0.7:3010']
+  #       labels:
+  #         exchange: 'okx'
+  #         strategy_group: 'funding-arb'
+  #   metrics_path: /metrics
+
+  # --- CMS Backend ---
+  - job_name: 'cms-backend'
+    static_configs:
+      - targets: ['cms-backend:3001']
+    metrics_path: /metrics
