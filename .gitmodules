@@ -4,3 +4,6 @@
 [submodule "docs"]
 	path = docs
 	url = git@github.com:PolyVN/trading-docs.git
+[submodule "packages/trading-engine"]
+	path = packages/trading-engine
+	url = git@github.com:PolyVN/trading-engine.git
