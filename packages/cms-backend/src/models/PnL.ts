@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema, type InferSchemaType } from 'mongoose';
 import { EXCHANGES } from '../constants.js';
 
 const PNL_EXCHANGES = [...EXCHANGES, 'all'] as const;
@@ -66,4 +66,5 @@ const pnlSchema = new Schema(
 pnlSchema.index({ exchange: 1, entityType: 1, entityId: 1, period: 1, timestamp: -1 });
 pnlSchema.index({ entityType: 1, entityId: 1, period: 1, timestamp: -1 });
 
+export type IPnL = InferSchemaType<typeof pnlSchema>;
 export const PnL = mongoose.model('PnL', pnlSchema);

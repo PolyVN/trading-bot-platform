@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema, type InferSchemaType } from 'mongoose';
 import { EXCHANGES } from '../constants.js';
 
 const walletSchema = new Schema(
@@ -28,4 +28,5 @@ walletSchema.index({ exchange: 1 });
 walletSchema.index({ exchange: 1, 'credentials.proxyAddress': 1 }, { sparse: true });
 walletSchema.index({ exchange: 1, 'credentials.apiKeyHash': 1 }, { sparse: true });
 
+export type IWallet = InferSchemaType<typeof walletSchema>;
 export const Wallet = mongoose.model('Wallet', walletSchema);

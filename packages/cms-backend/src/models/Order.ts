@@ -1,24 +1,5 @@
-import mongoose, { Schema } from 'mongoose';
-import { EXCHANGES } from '../constants.js';
-const ORDER_SIDES = ['BUY', 'SELL'] as const;
-const ORDER_TYPES = ['LIMIT', 'MARKET', 'STOP', 'TRAILING', 'TP_SL', 'ICEBERG', 'TWAP'] as const;
-const ORDER_STATUSES = [
-  'PENDING',
-  'OPEN',
-  'PARTIALLY_FILLED',
-  'FILLED',
-  'AMENDING',
-  'AMENDED',
-  'AMEND_FAILED',
-  'CANCELLING',
-  'CANCELLED',
-  'REJECTED',
-  'EXPIRED',
-  'FAILED',
-  'AMBIGUOUS',
-] as const;
-const ORDER_SOURCES = ['strategy', 'manual', 'risk_stop'] as const;
-const FILL_ROLES = ['maker', 'taker'] as const;
+import mongoose, { Schema, type InferSchemaType } from 'mongoose';
+import { EXCHANGES, ORDER_SIDES, ORDER_TYPES, ORDER_STATUSES, ORDER_SOURCES, FILL_ROLES } from '../constants.js';
 
 const DECIMAL_FIELDS = [
   'price',
@@ -125,4 +106,5 @@ orderSchema.index({ exchange: 1, status: 1 });
 orderSchema.index({ exchangeOrderId: 1 }, { sparse: true });
 orderSchema.index({ isPaper: 1 });
 
+export type IOrder = InferSchemaType<typeof orderSchema>;
 export const Order = mongoose.model('Order', orderSchema);

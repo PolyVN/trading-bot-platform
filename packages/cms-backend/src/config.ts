@@ -1,3 +1,5 @@
+const isDev = (process.env.NODE_ENV ?? 'development') === 'development';
+
 const env = (key: string, fallback?: string): string => {
   const value = process.env[key] ?? fallback;
   if (value === undefined) {
@@ -6,11 +8,21 @@ const env = (key: string, fallback?: string): string => {
   return value;
 };
 
+/**
+ * Require an env var in production, allow a dev-only fallback otherwise.
+ */
+const envRequired = (key: string, devFallback: string): string => {
+  const value = process.env[key];
+  if (value) return value;
+  if (isDev) return devFallback;
+  throw new Error(`Missing required environment variable: ${key} (no default in production)`);
+};
+
 export const config = {
   port: parseInt(env('PORT', '3001'), 10),
   host: env('HOST', '0.0.0.0'),
   nodeEnv: env('NODE_ENV', 'development'),
-  isDev: env('NODE_ENV', 'development') === 'development',
+  isDev,
 
   mongodb: {
     uri: env('MONGODB_URI', 'mongodb://root:password@localhost:27017/trading?authSource=admin'),
@@ -21,13 +33,13 @@ export const config = {
   },
 
   jwt: {
-    secret: env('JWT_SECRET', 'dev-secret-change-me'),
+    secret: envRequired('JWT_SECRET', 'dev-secret-do-not-use-in-production'),
     accessExpiresIn: env('JWT_ACCESS_EXPIRES_IN', '15m'),
     refreshExpiresIn: env('JWT_REFRESH_EXPIRES_IN', '7d'),
   },
 
   encryption: {
-    key: env('ENCRYPTION_KEY', '0000000000000000000000000000000000000000000000000000000000000000'),
+    key: envRequired('ENCRYPTION_KEY', 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'),
   },
 
   cors: {
@@ -41,6 +53,6 @@ export const config = {
 
   admin: {
     email: env('ADMIN_EMAIL', 'admin@polyvn.com'),
-    password: env('ADMIN_PASSWORD', 'changeme'),
+    password: envRequired('ADMIN_PASSWORD', 'changeme'),
   },
 } as const;

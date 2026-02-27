@@ -3,6 +3,8 @@ import { config } from './config.js';
 import { connectMongoDB, disconnectMongoDB } from './lib/mongoose.js';
 import { disconnectAllRedis, redisPub } from './lib/redis.js';
 import { seedAdminUser } from './services/seed.js';
+import { startRedisSubscriber, stopRedisSubscriber } from './services/redis-subscriber.js';
+import { startWorkers, stopWorkers } from './workers/processor.js';
 
 async function main() {
   const app = await buildApp();
@@ -28,6 +30,10 @@ async function main() {
   // Seed admin user on first run
   await seedAdminUser(app.log);
 
+  // Start Redis subscriber + BullMQ workers
+  await startRedisSubscriber();
+  startWorkers();
+
   // Start server
   try {
     await app.listen({ port: config.port, host: config.host });
@@ -40,7 +46,9 @@ async function main() {
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}, shutting down...`);
+    await stopRedisSubscriber();
     await app.close();
+    await stopWorkers();
     await disconnectMongoDB();
     await disconnectAllRedis();
     process.exit(0);

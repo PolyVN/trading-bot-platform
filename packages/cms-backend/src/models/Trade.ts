@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema, type InferSchemaType } from 'mongoose';
 import { EXCHANGES } from '../constants.js';
 
 const DECIMAL_FIELDS = ['price', 'size', 'fee', 'realizedPnl', 'realizedPnlUsd'];
@@ -44,4 +44,5 @@ tradeSchema.index({ exchange: 1, instId: 1, timestamp: -1 });
 tradeSchema.index({ strategyName: 1 });
 tradeSchema.index({ isPaper: 1 });
 
+export type ITrade = InferSchemaType<typeof tradeSchema>;
 export const Trade = mongoose.model('Trade', tradeSchema);

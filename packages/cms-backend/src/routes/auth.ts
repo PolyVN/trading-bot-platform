@@ -36,9 +36,9 @@ const updateUserSchema = z.object({
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   /**
-   * POST /api/auth/login
+   * POST /api/auth/login — stricter rate limit to prevent brute-force
    */
-  app.post('/login', async (request, reply) => {
+  app.post('/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Invalid input', details: parsed.error.issues });
@@ -287,6 +287,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     { preHandler: [authenticate, authorize('admin')] },
     async (request, reply) => {
       const { id } = request.params;
+
+      // Prevent admins from deleting themselves
+      if (id === request.authUser.sub) {
+        return reply.status(400).send({ error: 'Cannot delete your own account' });
+      }
+
       const result = await User.findOneAndDelete(filter({ userId: id }));
       if (!result) {
         return reply.status(404).send({ error: 'User not found' });

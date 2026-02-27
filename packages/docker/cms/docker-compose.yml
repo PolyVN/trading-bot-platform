@@ -14,12 +14,12 @@ services:
     ports: ["3001:3001"]
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@${DB_HOST}:6379
-      - MONGODB_URL=mongodb://${MONGO_USER}:${MONGO_PASS}@${DB_HOST}:27017/trading
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASS}@${DB_HOST}:27017/trading?authSource=admin
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - NODE_ENV=production
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/system/health"]
       interval: 30s
       timeout: 10s
       retries: 3

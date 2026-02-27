@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema, type InferSchemaType } from 'mongoose';
 import { EXCHANGES } from '../constants.js';
 const ROLES = ['admin', 'operator', 'viewer'] as const;
 
@@ -21,4 +21,5 @@ const userSchema = new Schema(
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 
+export type IUser = InferSchemaType<typeof userSchema>;
 export const User = mongoose.model('User', userSchema);

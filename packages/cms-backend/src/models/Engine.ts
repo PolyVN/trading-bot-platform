@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema, type InferSchemaType } from 'mongoose';
 import { EXCHANGES } from '../constants.js';
 const ENGINE_STATUSES = ['online', 'draining', 'offline'] as const;
 
@@ -33,4 +33,5 @@ const engineSchema = new Schema(
 engineSchema.index({ status: 1 });
 engineSchema.index({ supportedExchanges: 1 });
 
+export type IEngine = InferSchemaType<typeof engineSchema>;
 export const Engine = mongoose.model('Engine', engineSchema);

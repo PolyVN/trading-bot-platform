@@ -1,17 +1,5 @@
-import mongoose, { Schema } from 'mongoose';
-import { EXCHANGES } from '../constants.js';
-const BOT_STATUSES = [
-  'IDLE',
-  'STARTING',
-  'RUNNING',
-  'PAUSING',
-  'PAUSED',
-  'STOPPING',
-  'STOPPED',
-  'RISK_STOPPED',
-  'ERROR',
-] as const;
-const MODES = ['live', 'paper'] as const;
+import mongoose, { Schema, type InferSchemaType } from 'mongoose';
+import { EXCHANGES, BOT_STATUSES, MODES } from '../constants.js';
 
 const RISK_DECIMAL_FIELDS = [
   'maxPositionSize',
@@ -89,4 +77,5 @@ botSchema.index({ strategyName: 1 });
 botSchema.index({ mode: 1 });
 botSchema.index({ assignedEngineId: 1 });
 
+export type IBot = InferSchemaType<typeof botSchema>;
 export const Bot = mongoose.model('Bot', botSchema);

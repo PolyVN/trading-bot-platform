@@ -64,8 +64,8 @@ export function authorizeExchange(
 
     const { role, allowedExchanges } = request.authUser;
 
-    // Admins and viewers bypass exchange scoping
-    if (role === 'admin' || role === 'viewer') return;
+    // Only admins bypass exchange scoping
+    if (role === 'admin') return;
 
     // Operators: check allowedExchanges
     const exchange = await exchangeExtractor(request);
@@ -83,7 +83,7 @@ export function authorizeExchange(
  * Build MongoDB exchange filter based on user permissions.
  */
 export function buildExchangeFilter(user: AuthUser): Record<string, unknown> {
-  if (user.role === 'admin' || user.role === 'viewer') return {};
+  if (user.role === 'admin') return {};
   if (user.allowedExchanges.length === 0) return {};
   return { exchange: { $in: user.allowedExchanges } };
 }

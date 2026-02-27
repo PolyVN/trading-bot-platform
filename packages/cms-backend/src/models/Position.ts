@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema, type InferSchemaType } from 'mongoose';
 import { EXCHANGES } from '../constants.js';
 
 const DECIMAL_FIELDS = [
@@ -58,4 +58,5 @@ const positionSchema = new Schema(
 positionSchema.index({ exchange: 1, botId: 1 });
 positionSchema.index({ exchange: 1, instId: 1 });
 
+export type IPosition = InferSchemaType<typeof positionSchema>;
 export const Position = mongoose.model('Position', positionSchema);

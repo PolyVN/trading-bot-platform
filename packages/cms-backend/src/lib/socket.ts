@@ -13,7 +13,22 @@ export function setupSocketIO(app: FastifyInstance): SocketIOServer {
     path: '/socket.io',
   });
 
-  app.log.info('[Socket.IO] Server attached');
+  // Authenticate WebSocket connections via JWT
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
+    try {
+      const decoded = app.jwt.verify(token);
+      socket.data.user = decoded;
+      next();
+    } catch {
+      next(new Error('Invalid or expired token'));
+    }
+  });
+
+  app.log.info('[Socket.IO] Server attached with JWT auth');
 
   return io;
 }
