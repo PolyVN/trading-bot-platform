@@ -4,29 +4,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Multi-exchange event-driven trading bot system. Supports **Polymarket** (on-chain prediction markets), **OKX** (spot/futures/perpetuals), and **Kalshi** (CFTC-regulated prediction markets), extensible to more exchanges. Multi-repo architecture with 5 repositories, 3-4 VPS deployment. This repo is the root project containing architecture documentation and orchestration.
+Multi-exchange event-driven trading bot system. Supports **Polymarket** (on-chain prediction markets) and **OKX** (spot/futures/perpetuals), extensible to more exchanges. Multi-repo architecture with 5 repositories, deployed as Docker services across 3 servers (optionally 4+ with dedicated TE per exchange). This repo is the root project containing architecture documentation and orchestration.
 
-## Architecture (3-4 VPS, 5 Repos)
+## Architecture (Docker Services, 5 Repos)
 
 ```
-VPS 1: TE Polymarket (Rust/tokio) ──┐
-VPS 4: TE OKX (Rust/tokio)         ├── VPS 3: MongoDB + Redis
-  (or co-located on VPS 1)          │
-VPS 2: CMS Backend (Fastify) +     ─┘
-       CMS Frontend (Next.js 15)
+Trading Engine (Rust/tokio)        ──┐
+  Polymarket + OKX adapters            ├── Database: MongoDB + Redis
+CMS Backend (Fastify) +              │
+CMS Frontend (Next.js 16)           ─┘
 ```
 
 | Repo | Purpose |
 |------|---------|
 | `trading-shared-types` | JSON Schema (source of truth) → generated TypeScript (`@polyvn/shared-types`) + Rust (`polyvn-shared-types` crate) |
-| `trading-engine` | Rust trading engine: bot execution, exchange adapters (polymarket-client-sdk, OKX, Kalshi), strategies, data feeds |
+| `trading-engine` | Rust trading engine: bot execution, exchange adapters (polymarket-client-sdk, OKX), strategies, data feeds |
 | `trading-cms-backend` | Fastify REST API, BullMQ workers, Socket.IO relay (exchange-agnostic, Node.js/TypeScript) |
-| `trading-cms-frontend` | Next.js 15 dashboard with shadcn/ui, exchange selector, realtime via Socket.IO |
-| `trading-docker` | Docker Compose per VPS (vps1-trading, vps2-cms, vps3-database, vps4-okx) |
+| `trading-cms-frontend` | Next.js 16 dashboard with shadcn/ui, exchange selector, realtime via Socket.IO |
+| `trading-docker` | Docker Compose per service (trading-engine, cms, database) |
 
 ## Multi-Exchange Architecture
 
-**Exchange type**: `'polymarket' | 'okx' | 'kalshi'` (extensible union type)
+**Exchange type**: `'polymarket' | 'okx'` (extensible union type)
 
 **Exchange Abstraction Layer**: Core traits decouple trading logic from exchange specifics:
 - `OrderExecutor` trait - place/cancel/amend orders
@@ -35,26 +34,25 @@ VPS 2: CMS Backend (Fastify) +     ─┘
 - `PositionAdapter` trait - position tracking (binary shares vs leveraged contracts)
 - `ExchangeAdapter` - composite struct combining all above (trait objects)
 
-**ExchangeRegistry**: Factory singleton that registers exchange adapters at startup. BotRunner resolves adapter via `ExchangeRegistry::get_adapter(bot.exchange)`.
+**ExchangeRegistry**: Factory singleton that registers `ExchangeAdapterFactory` per exchange at startup. BotRunner creates per-bot adapter via `ExchangeRegistry::create_adapter(&bot_config)`.
 
-| Aspect | Polymarket | OKX | Kalshi |
-|--------|-----------|-----|--------|
-| Type | Prediction market (on-chain) | CEX (spot/futures/perp/options) | Prediction market (CFTC-regulated) |
-| Auth | Proxy wallet + PK → CLOB creds | API Key + Secret + Passphrase | API Key (RSA sign) or session token |
-| Currency | USDC only | Multi-currency (USDT, USDC, BTC...) | USD only (ACH) |
-| Leverage | No | 1x-125x | No |
-| Resolution | Yes (UMA oracle, 48–72h dispute) | No (continuous), but futures expire | Yes (Kalshi direct, no dispute) |
-| Jurisdiction | Global | Global | US only (KYC required) |
-| Order types | Limit, Market | Limit, Market, Stop, Trailing, TP/SL, Iceberg, TWAP | Limit, Market |
-| Primary arb use | Cross-market (vs Kalshi) | Cross-exchange (vs Polymarket) | Cross-market (vs Polymarket) |
+| Aspect | Polymarket | OKX |
+|--------|-----------|-----|
+| Type | Prediction market (on-chain) | CEX (spot/futures/perp/options) |
+| Auth | Proxy wallet + PK → CLOB creds | API Key + Secret + Passphrase |
+| Currency | USDC only | Multi-currency (USDT, USDC, BTC...) |
+| Leverage | No | 1x-125x |
+| Resolution | Yes (UMA oracle, 48–72h dispute) | No (continuous), but futures expire |
+| Jurisdiction | Global | Global |
+| Order types | Limit, Market | Limit, Market, Stop, Trailing, TP/SL, Iceberg, TWAP |
 
 ## Communication Flow
 
-- **Trading Engine → CMS Backend**: Redis Pub/Sub (realtime) + Redis Streams in BullMQ-compatible format (persistent)
+- **Trading Engine → CMS Backend**: Redis Pub/Sub (realtime) + BullMQ-compatible job enqueue (persistent)
 - **CMS Backend → Trading Engine**: Redis Pub/Sub with `{engineId}` routing
 - **CMS Backend → CMS Frontend**: Socket.IO WebSocket + REST API
-- **Persistence**: Only CMS Backend writes to MongoDB (via BullMQ workers). Trading Engine never touches DB directly. Rust TE writes jobs to Redis Streams using BullMQ's internal key format (`bull:{queueName}:wait` + XADD); CMS Backend BullMQ workers consume normally.
-- **All payloads** include `exchange`, `engineId`, and `timestamp` fields. JSON serialized via `serde_json` on Rust side, parsed natively on Node.js side.
+- **Persistence**: Only CMS Backend writes to MongoDB (via BullMQ workers). Trading Engine never touches DB directly. Rust TE enqueues jobs by replicating BullMQ's internal protocol via Lua script: `INCR` job ID → `HSET bull:{queueName}:{jobId}` (job data) → `LPUSH bull:{queueName}:wait` (FIFO enqueue) → `PUBLISH` (notify workers). CMS Backend BullMQ workers consume normally.
+- **All payloads** include `engineId`, `exchange`, and `timestamp` (Unix epoch **milliseconds**). JSON serialized via `serde_json` on Rust side, parsed natively on Node.js side.
 
 ## Key Architectural Patterns
 
@@ -74,13 +72,13 @@ VPS 2: CMS Backend (Fastify) +     ─┘
 
 ## Important Conventions
 
-- All Redis Pub/Sub payloads include `exchange`, `engine_id`, and `timestamp`
+- All Redis Pub/Sub payloads include `engineId`, `exchange`, and `timestamp` (camelCase in JSON; Rust uses `#[serde(rename_all = "camelCase")]`)
 - All database models include `exchange` field with compound indexes
 - Channel names defined as shared constants in JSON Schema package (never hardcode strings); Rust uses generated const definitions, TypeScript uses generated const objects
 - Credentials encrypted with AES-256-GCM (`aes-gcm` crate in Rust, `crypto` module in Node.js)
 - Wallet-bot binding enforced: `wallet.exchange` must match `bot.exchange`
 - Order status never goes backwards (use `STATUS_ORDER` map for comparison)
-- Pub/Sub payloads must stay < 10KB; large data goes through Redis Streams (BullMQ-compatible)
+- Pub/Sub payloads must stay < 10KB; large data goes through BullMQ jobs (persistent queue)
 - Use separate Redis connections for subscriber vs publisher vs cache (`deadpool-redis` pools in Rust)
 - Bot states: IDLE → STARTING → RUNNING → PAUSING/PAUSED → STOPPING → STOPPED, plus RISK_STOPPED and ERROR
 - RBAC roles: admin (full), operator (manage bots/orders, exchange-scoped), viewer (read-only)
@@ -104,8 +102,8 @@ Full architecture docs are in `docs/` organized by domain:
 
 | Service | Stack |
 |---------|-------|
-| Trading Engine | **Rust** (tokio async runtime), polymarket-client-sdk, redis-rs + deadpool-redis, tokio-tungstenite, serde/serde_json, tracing + tracing-subscriber, prometheus-client, aes-gcm, rust_decimal, reqwest |
-| Shared Types | **JSON Schema** (source of truth) → codegen to TypeScript (`json-schema-to-typescript`) + Rust (`typify` / `schemafy`) |
-| CMS Backend | Node.js/TypeScript: Fastify, Mongoose (MongoDB), Socket.IO, BullMQ workers, NextAuth-compatible JWT |
-| CMS Frontend | Next.js 15, shadcn/ui, TanStack Query v5, TanStack Table, Recharts, Socket.IO Client, NextAuth.js v5 |
-| Infrastructure | Docker Compose, Redis 7, MongoDB 7, Prometheus, Grafana, Caddy/nginx reverse proxy |
+| Trading Engine | **Rust 2024 edition** (MSRV 1.85): tokio 1.49, serde 1.0, reqwest 0.13, redis 1.0 + deadpool-redis 0.23, tokio-tungstenite 0.28, tracing 0.1 + tracing-subscriber 0.3, prometheus-client 0.24, aes-gcm 0.10, rust_decimal 1.40, axum 0.8, chrono 0.4, anyhow 1.0, thiserror 2.0, polymarket-client-sdk |
+| Shared Types | **JSON Schema** (source of truth) → codegen to TypeScript (`json-schema-to-typescript 15.0`) + Rust (`typify 0.6`) |
+| CMS Backend | **Node.js 22 LTS** / TypeScript 5.9: Fastify 5.7, Mongoose 9.2, Socket.IO 4.8, BullMQ 5.70, ioredis 5.9, Zod 4.3, Pino 10.3, prom-client 15.1, decimal.js 10.6, NextAuth-compatible JWT |
+| CMS Frontend | **Next.js 16** / React 19.2: shadcn/ui (latest), Tailwind CSS 4.2, TanStack Query 5.90, TanStack Table 8.21, Recharts 3.7, Socket.IO Client 4.8, NextAuth.js 4.24, react-hook-form 7.71, nuqs 2.8, sonner 2.0 |
+| Infrastructure | Docker Compose v2, Redis 7.4, MongoDB 8.0, Prometheus 3.x, Grafana 11.x, Caddy 2.9 |

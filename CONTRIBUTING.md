@@ -10,12 +10,12 @@ This is a multi-repo project. See [docs/00-overview.md](docs/00-overview.md) for
 | `trading-cms-backend` | TypeScript | REST API, queue workers, Socket.IO relay |
 | `trading-cms-frontend` | TypeScript | Next.js dashboard |
 | `trading-shared-types` | JSON Schema | Source of truth → codegen to TypeScript (`@polyvn/shared-types`) + Rust (`polyvn-shared-types`) |
-| `trading-docker` | YAML | Docker Compose per VPS |
+| `trading-docker` | YAML | Docker Compose per server |
 
 ## Development Setup
 
 1. Clone all repos into the same parent directory
-2. Start MongoDB + Redis locally (or use `trading-docker/vps3-database`)
+2. Start MongoDB + Redis locally (or use `trading-docker/database`)
 3. **Trading Engine (Rust)**:
    - Install Rust toolchain: `rustup install stable`
    - Build: `cd trading-engine && cargo build`
@@ -30,7 +30,7 @@ This is a multi-repo project. See [docs/00-overview.md](docs/00-overview.md) for
 ## Code Conventions
 
 ### Trading Engine (Rust)
-- **Rust 2021 edition**, async with `tokio`
+- **Rust 2024 edition** (MSRV 1.85), async with `tokio 1.49`
 - **`tracing`** for structured JSON logging (`tracing-subscriber` with JSON formatter)
 - **`serde`** + `serde_json` for serialization (all Redis payloads)
 - **`rust_decimal`** for precise financial calculations (never use `f64` for money)
