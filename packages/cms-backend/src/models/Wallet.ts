@@ -17,7 +17,7 @@ const walletSchema = new Schema(
       default: 'exclusive',
     },
     isActive: { type: Boolean, required: true, default: true },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: String },
   },
   {
     timestamps: { createdAt: 'createdAt', updatedAt: false },

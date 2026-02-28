@@ -2,24 +2,40 @@ import { Worker, Job } from 'bullmq';
 import { redisBullMQ } from '../lib/redis.js';
 import { QUEUE_NAMES } from '../constants.js';
 import { logger } from '../lib/logger.js';
+import { mongoFilter } from '../middleware/auth.js';
 import { Order } from '../models/Order.js';
 import { Trade } from '../models/Trade.js';
 import { PnL } from '../models/PnL.js';
 import { AuditLog } from '../models/AuditLog.js';
 import { Notification } from '../models/Notification.js';
-
-// Helper for Mongoose 9 filter typing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const filter = (obj: Record<string, unknown>): any => obj;
+import { dlqQueue } from './index.js';
+import { config } from '../config.js';
 
 const workers: Worker[] = [];
 
 async function processOrderJob(job: Job): Promise<void> {
   const data = job.data;
   logger.debug({ jobId: job.id, orderId: data.orderId }, '[Worker:orders] Processing');
+
+  // Build update with timeline append for status changes
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const update: Record<string, any> = { $set: { ...data } };
+
+  if (data.status) {
+    // Remove timeline from $set — we push it separately
+    delete update.$set.timeline;
+    update.$push = {
+      timeline: {
+        status: data.status,
+        timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+        details: data.statusReason ?? `Status updated to ${data.status}`,
+      },
+    };
+  }
+
   await Order.findOneAndUpdate(
-    filter({ orderId: data.orderId }),
-    { $set: data },
+    mongoFilter({ orderId: data.orderId }),
+    update,
     { upsert: true },
   );
 }
@@ -28,7 +44,7 @@ async function processTradeJob(job: Job): Promise<void> {
   const data = job.data;
   logger.debug({ jobId: job.id, tradeId: data.tradeId }, '[Worker:trades] Processing');
   await Trade.findOneAndUpdate(
-    filter({ tradeId: data.tradeId }),
+    mongoFilter({ tradeId: data.tradeId }),
     { $set: data },
     { upsert: true },
   );
@@ -42,8 +58,34 @@ async function processPnlJob(job: Job): Promise<void> {
 
 async function processNotificationJob(job: Job): Promise<void> {
   const data = job.data;
-  logger.debug({ jobId: job.id }, '[Worker:notifications] Processing');
-  await Notification.create(data);
+  logger.debug({ jobId: job.id, type: data.type }, '[Worker:notifications] Processing');
+
+  const notification = await Notification.create(data);
+
+  // Attempt Telegram delivery for critical notifications (best-effort)
+  if (data.severity === 'critical' && config.telegram.botToken && config.telegram.chatId) {
+    try {
+      const text = `*${data.title}*\n${data.message}`;
+      const url = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: config.telegram.chatId,
+          text,
+          parse_mode: 'Markdown',
+        }),
+      });
+      await Notification.updateOne(
+        mongoFilter({ notificationId: notification.notificationId }),
+        { $set: { sentViaTelegram: true } },
+      );
+      logger.info({ notificationId: data.notificationId }, '[Worker:notifications] Telegram sent');
+    } catch (err) {
+      logger.warn({ err, notificationId: data.notificationId }, '[Worker:notifications] Telegram failed');
+      // Don't fail the job — notification is persisted, Telegram is best-effort
+    }
+  }
 }
 
 async function processAuditJob(job: Job): Promise<void> {
@@ -59,7 +101,33 @@ function createWorker(queueName: string, processor: (job: Job) => Promise<void>)
   });
 
   worker.on('failed', (job, err) => {
-    logger.error({ jobId: job?.id, err: err.message }, `[Worker:${queueName}] Job failed`);
+    const attempts = job?.attemptsMade ?? 0;
+    const maxAttempts = job?.opts?.attempts ?? 3;
+
+    if (attempts >= maxAttempts) {
+      // All retries exhausted — move to DLQ
+      logger.error(
+        { jobId: job?.id, err: err.message, attempts },
+        `[Worker:${queueName}] Job permanently failed, moving to DLQ`,
+      );
+      dlqQueue
+        .add(`dlq:${queueName}`, {
+          originalQueue: queueName,
+          jobId: job?.id,
+          data: job?.data,
+          error: err.message,
+          failedAt: new Date().toISOString(),
+          attempts,
+        })
+        .catch((dlqErr) => {
+          logger.error({ dlqErr }, `[Worker:${queueName}] Failed to enqueue to DLQ`);
+        });
+    } else {
+      logger.warn(
+        { jobId: job?.id, err: err.message, attempt: attempts, maxAttempts },
+        `[Worker:${queueName}] Job failed, will retry`,
+      );
+    }
   });
 
   worker.on('error', (err) => {

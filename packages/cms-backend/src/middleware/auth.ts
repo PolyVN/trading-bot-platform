@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { ForbiddenError } from '../lib/route-utils.js';
 
 export interface AuthUser {
   sub: string;
@@ -87,3 +88,22 @@ export function buildExchangeFilter(user: AuthUser): Record<string, unknown> {
   if (user.allowedExchanges.length === 0) return {};
   return { exchange: { $in: user.allowedExchanges } };
 }
+
+/**
+ * Check that user has access to the given exchange.
+ * Admins bypass; operators checked against allowedExchanges.
+ * Throws ForbiddenError if access denied.
+ */
+export function checkExchangeAccess(user: AuthUser, exchange: string): void {
+  if (user.role === 'admin') return;
+  if (user.allowedExchanges.length > 0 && !user.allowedExchanges.includes(exchange)) {
+    throw new ForbiddenError(`No access to exchange: ${exchange}`);
+  }
+}
+
+/**
+ * Mongoose 9 filter helper for query typing.
+ * Mongoose 9's strict typing rejects `Record<string, unknown>` as a filter.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const mongoFilter = (obj: Record<string, unknown>): any => obj;

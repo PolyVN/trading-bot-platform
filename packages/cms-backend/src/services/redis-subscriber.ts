@@ -1,12 +1,9 @@
 import { redisSub } from '../lib/redis.js';
 import { getIO } from '../lib/socket.js';
 import { logger } from '../lib/logger.js';
+import { mongoFilter } from '../middleware/auth.js';
 import { orderQueue, tradeQueue, auditQueue, notificationQueue } from '../workers/index.js';
 import { Position } from '../models/Position.js';
-
-// Helper for Mongoose 9 filter typing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const filter = (obj: Record<string, unknown>): any => obj;
 
 /**
  * TE channel patterns for pattern-based subscription.
@@ -34,15 +31,32 @@ const TE_CHANNEL_PATTERNS = [
 ];
 
 /**
+ * Emit a TE event to appropriate Socket.IO rooms based on event data.
+ * Rooms: bot:{botId}, exchange:{exchange}, global (always).
+ */
+function emitToRooms(channel: string, data: Record<string, unknown>): void {
+  try {
+    const io = getIO();
+    const exchange = data.exchange as string | undefined;
+    const botId = data.botId as string | undefined;
+
+    if (botId) io.to(`bot:${botId}`).emit(channel, data);
+    if (exchange) io.to(`exchange:${exchange}`).emit(channel, data);
+    io.to('global').emit(channel, data);
+  } catch {
+    // Socket.IO may not be initialized during startup
+  }
+}
+
+/**
  * Relay TE events to Socket.IO rooms and enqueue persistent jobs via BullMQ.
  */
 function handleMessage(channel: string, message: string): void {
   try {
     const data = JSON.parse(message);
-    const io = getIO();
 
-    // Relay all TE events to Socket.IO (room = channel for filtering)
-    io.emit(channel, data);
+    // Relay all TE events to Socket.IO rooms
+    emitToRooms(channel, data);
 
     // Enqueue persistent jobs for specific event types
     if (channel.startsWith('te:order:update:')) {
@@ -56,7 +70,7 @@ function handleMessage(channel: string, message: string): void {
     } else if (channel.startsWith('te:position:update:')) {
       // Position updates are persisted directly (no BullMQ queue for positions)
       Position.findOneAndUpdate(
-        filter({ positionId: data.positionId }),
+        mongoFilter({ positionId: data.positionId }),
         { $set: data },
         { upsert: true },
       ).catch((err) => {
