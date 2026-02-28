@@ -32,6 +32,7 @@ const engineSchema = new Schema(
 
 engineSchema.index({ status: 1 });
 engineSchema.index({ supportedExchanges: 1 });
+engineSchema.index({ status: 1, lastHeartbeat: 1 });
 
 export type IEngine = InferSchemaType<typeof engineSchema>;
 export const Engine = mongoose.model('Engine', engineSchema);
