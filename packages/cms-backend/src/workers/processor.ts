@@ -8,8 +8,9 @@ import { Trade } from '../models/Trade.js';
 import { PnL } from '../models/PnL.js';
 import { AuditLog } from '../models/AuditLog.js';
 import { Notification } from '../models/Notification.js';
-import { dlqQueue } from './index.js';
+import { dlqQueue, pnlQueue } from './index.js';
 import { config } from '../config.js';
+import { PnLService } from '../services/pnl.service.js';
 
 const workers: Worker[] = [];
 
@@ -51,6 +52,13 @@ async function processTradeJob(job: Job): Promise<void> {
 }
 
 async function processPnlJob(job: Job): Promise<void> {
+  if (job.name === 'pnl-hourly-snapshot') {
+    logger.info({ jobId: job.id }, '[Worker:pnl] Running hourly snapshot');
+    const count = await PnLService.createHourlySnapshots();
+    logger.info({ jobId: job.id, snapshots: count }, '[Worker:pnl] Hourly snapshot complete');
+    return;
+  }
+
   const data = job.data;
   logger.debug({ jobId: job.id }, '[Worker:pnl] Processing');
   await PnL.create(data);
@@ -145,6 +153,16 @@ export function startWorkers(): void {
     createWorker(QUEUE_NAMES.notifications, processNotificationJob),
     createWorker(QUEUE_NAMES.audit, processAuditJob),
   );
+
+  // Schedule hourly PnL snapshot as a repeatable job
+  pnlQueue
+    .add('pnl-hourly-snapshot', {}, {
+      repeat: { pattern: '0 * * * *' }, // every hour at :00
+      jobId: 'pnl-hourly-snapshot',
+    })
+    .catch((err) => {
+      logger.error({ err }, '[Workers] Failed to schedule PnL hourly snapshot');
+    });
 
   logger.info(`[Workers] Started ${workers.length} queue workers`);
 }
