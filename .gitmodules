@@ -7,3 +7,6 @@
 [submodule "packages/trading-engine"]
 	path = packages/trading-engine
 	url = git@github.com:PolyVN/trading-engine.git
+[submodule "packages/cms-backend"]
+	path = packages/cms-backend
+	url = git@github.com:PolyVN/trading-cms-backend.git
