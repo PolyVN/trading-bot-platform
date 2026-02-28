@@ -101,11 +101,16 @@ export class PnLService {
       tradesByBot.set(trade.botId, list);
     }
 
+    // Batch bot lookup (avoids N+1 queries)
+    const botIds = [...tradesByBot.keys()];
+    const bots = await Bot.find(mongoFilter({ botId: { $in: botIds } })).lean();
+    const botMap = new Map(bots.map((b) => [b.botId, b]));
+
     const snapshots: Record<string, unknown>[] = [];
 
     // Per-bot snapshots
     for (const [botId, botTrades] of tradesByBot) {
-      const bot = await Bot.findOne(mongoFilter({ botId })).lean();
+      const bot = botMap.get(botId);
       if (!bot) continue;
 
       const metrics = PnLService.calculateTradeMetrics(botTrades);
@@ -156,20 +161,24 @@ export class PnLService {
       ...globalMetrics,
     });
 
-    // Upsert all snapshots (idempotent)
-    for (const snapshot of snapshots) {
-      await PnL.findOneAndUpdate(
-        mongoFilter({
-          entityType: snapshot.entityType,
-          entityId: snapshot.entityId,
-          exchange: snapshot.exchange,
-          period: snapshot.period,
-          timestamp: snapshot.timestamp,
-          isPaper: snapshot.isPaper,
-        }),
-        { $set: snapshot },
-        { upsert: true },
-      );
+    // Bulk upsert all snapshots (idempotent)
+    if (snapshots.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ops: any[] = snapshots.map((snapshot) => ({
+        updateOne: {
+          filter: {
+            entityType: snapshot.entityType,
+            entityId: snapshot.entityId,
+            exchange: snapshot.exchange,
+            period: snapshot.period,
+            timestamp: snapshot.timestamp,
+            isPaper: snapshot.isPaper,
+          },
+          update: { $set: snapshot },
+          upsert: true,
+        },
+      }));
+      await PnL.bulkWrite(ops);
     }
 
     logger.info({ count: snapshots.length }, '[PnL] Hourly snapshots created');
@@ -259,6 +268,65 @@ export class PnLService {
       },
       { upsert: true },
     );
+  }
+
+  /**
+   * Run daily aggregation: roll up hourly snapshots into 1d periods.
+   * Also creates weekly (1w) aggregations on Sundays.
+   * Called by the scheduled BullMQ job at 00:05 daily.
+   */
+  static async runDailyAggregation(): Promise<void> {
+    const now = new Date();
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    // Aggregate the previous day
+    const prevDayStart = new Date(dayStart.getTime() - 24 * 60 * 60 * 1000);
+    const prevDayEnd = dayStart;
+
+    // Find all distinct entity combinations from hourly snapshots in the previous day
+    const hourlies = await PnL.find(mongoFilter({
+      period: '1h',
+      timestamp: { $gte: prevDayStart, $lt: prevDayEnd },
+    }))
+      .select('entityType entityId exchange isPaper')
+      .lean();
+
+    // Deduplicate by composite key
+    const seen = new Set<string>();
+    const entities: { entityType: string; entityId: string; exchange: string; isPaper: boolean }[] = [];
+    for (const h of hourlies) {
+      const key = `${h.entityType}:${h.entityId}:${h.exchange}:${h.isPaper}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        entities.push({
+          entityType: h.entityType as string,
+          entityId: h.entityId as string,
+          exchange: h.exchange as string,
+          isPaper: h.isPaper as boolean,
+        });
+      }
+    }
+
+    // Daily aggregation
+    for (const e of entities) {
+      await PnLService.aggregateSnapshots(
+        e.entityType, e.entityId, e.exchange, '1d',
+        prevDayStart, prevDayEnd, e.isPaper,
+      );
+    }
+
+    // Weekly aggregation (on Mondays, aggregate the previous week Sun-Sat)
+    if (now.getDay() === 1) {
+      const weekStart = new Date(prevDayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+      for (const e of entities) {
+        await PnLService.aggregateSnapshots(
+          e.entityType, e.entityId, e.exchange, '1w',
+          weekStart, prevDayEnd, e.isPaper,
+        );
+      }
+    }
+
+    logger.info({ entities: entities.length, day: prevDayStart.toISOString() }, '[PnL] Daily aggregation done');
   }
 
   /**

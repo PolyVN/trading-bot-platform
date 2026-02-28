@@ -40,9 +40,11 @@ function emitToRooms(channel: string, data: Record<string, unknown>): void {
     const exchange = data.exchange as string | undefined;
     const botId = data.botId as string | undefined;
 
-    if (botId) io.to(`bot:${botId}`).emit(channel, data);
-    if (exchange) io.to(`exchange:${exchange}`).emit(channel, data);
-    io.to('global').emit(channel, data);
+    // Chain .to() calls so Socket.IO deduplicates across rooms in a single emit
+    let target = io.to('global');
+    if (exchange) target = target.to(`exchange:${exchange}`);
+    if (botId) target = target.to(`bot:${botId}`);
+    target.emit(channel, data);
   } catch {
     // Socket.IO may not be initialized during startup
   }

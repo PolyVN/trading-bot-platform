@@ -21,10 +21,10 @@ async function processOrderJob(job: Job): Promise<void> {
   // Build update with timeline append for status changes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const update: Record<string, any> = { $set: { ...data } };
+  // Never overwrite timeline via $set — always use $push
+  delete update.$set.timeline;
 
   if (data.status) {
-    // Remove timeline from $set — we push it separately
-    delete update.$set.timeline;
     update.$push = {
       timeline: {
         status: data.status,
@@ -59,6 +59,13 @@ async function processPnlJob(job: Job): Promise<void> {
     return;
   }
 
+  if (job.name === 'pnl-daily-aggregation') {
+    logger.info({ jobId: job.id }, '[Worker:pnl] Running daily aggregation');
+    await PnLService.runDailyAggregation();
+    logger.info({ jobId: job.id }, '[Worker:pnl] Daily aggregation complete');
+    return;
+  }
+
   const data = job.data;
   logger.debug({ jobId: job.id }, '[Worker:pnl] Processing');
   await PnL.create(data);
@@ -75,7 +82,7 @@ async function processNotificationJob(job: Job): Promise<void> {
     try {
       const text = `*${data.title}*\n${data.message}`;
       const url = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
-      await fetch(url, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,6 +91,13 @@ async function processNotificationJob(job: Job): Promise<void> {
           parse_mode: 'Markdown',
         }),
       });
+      if (!response.ok) {
+        logger.warn(
+          { status: response.status, notificationId: data.notificationId },
+          '[Worker:notifications] Telegram API returned error',
+        );
+        return;
+      }
       await Notification.updateOne(
         mongoFilter({ notificationId: notification.notificationId }),
         { $set: { sentViaTelegram: true } },
@@ -154,7 +168,7 @@ export function startWorkers(): void {
     createWorker(QUEUE_NAMES.audit, processAuditJob),
   );
 
-  // Schedule hourly PnL snapshot as a repeatable job
+  // Schedule PnL repeatable jobs
   pnlQueue
     .add('pnl-hourly-snapshot', {}, {
       repeat: { pattern: '0 * * * *' }, // every hour at :00
@@ -162,6 +176,15 @@ export function startWorkers(): void {
     })
     .catch((err) => {
       logger.error({ err }, '[Workers] Failed to schedule PnL hourly snapshot');
+    });
+
+  pnlQueue
+    .add('pnl-daily-aggregation', {}, {
+      repeat: { pattern: '5 0 * * *' }, // daily at 00:05 (after hourly snapshot)
+      jobId: 'pnl-daily-aggregation',
+    })
+    .catch((err) => {
+      logger.error({ err }, '[Workers] Failed to schedule PnL daily aggregation');
     });
 
   logger.info(`[Workers] Started ${workers.length} queue workers`);

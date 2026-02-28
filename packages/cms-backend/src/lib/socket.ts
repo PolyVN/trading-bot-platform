@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
+import { EXCHANGES } from '../constants.js';
 import { logger } from './logger.js';
 
 let io: SocketIOServer | null = null;
@@ -45,8 +46,9 @@ export function setupSocketIO(app: FastifyInstance): SocketIOServer {
       }
     } else {
       // Admins (or users with no exchange restrictions) join all exchange rooms
-      socket.join('exchange:polymarket');
-      socket.join('exchange:okx');
+      for (const ex of EXCHANGES) {
+        socket.join(`exchange:${ex}`);
+      }
     }
 
     // Allow clients to subscribe/unsubscribe to bot-specific rooms dynamically
