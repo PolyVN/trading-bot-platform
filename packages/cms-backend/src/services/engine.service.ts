@@ -160,10 +160,13 @@ export class EngineService {
 
     // If engine is draining, still update heartbeat but don't change status
     if (!result) {
-      await Engine.findOneAndUpdate(
+      const fallback = await Engine.findOneAndUpdate(
         mongoFilter({ engineId }),
         { $set: update },
       );
+      if (!fallback) {
+        logger.warn({ engineId }, '[EngineService] Heartbeat from unknown engine (not registered)');
+      }
     }
   }
 
@@ -174,7 +177,7 @@ export class EngineService {
     const { engineId } = data;
     if (!engineId) return;
 
-    await Engine.findOneAndUpdate(
+    const result = await Engine.findOneAndUpdate(
       mongoFilter({ engineId }),
       {
         $set: {
@@ -186,7 +189,11 @@ export class EngineService {
       },
     );
 
-    logger.info({ engineId }, '[EngineService] Engine shut down');
+    if (result) {
+      logger.info({ engineId }, '[EngineService] Engine shut down');
+    } else {
+      logger.warn({ engineId }, '[EngineService] Shutdown received for unknown engine');
+    }
   }
 
   /**
