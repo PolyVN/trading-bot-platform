@@ -13,3 +13,6 @@
 [submodule "packages/cms-frontend"]
 	path = packages/cms-frontend
 	url = git@github.com:PolyVN/trading-cms-frontend.git
+[submodule "packages/docker"]
+	path = packages/docker
+	url = git@github.com:PolyVN/trading-docker.git
