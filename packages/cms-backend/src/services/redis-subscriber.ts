@@ -4,6 +4,7 @@ import { logger } from '../lib/logger.js';
 import { mongoFilter } from '../middleware/auth.js';
 import { orderQueue, tradeQueue, auditQueue, notificationQueue } from '../workers/index.js';
 import { Position } from '../models/Position.js';
+import { EngineService } from './engine.service.js';
 
 /**
  * TE channel patterns for pattern-based subscription.
@@ -82,9 +83,23 @@ function handleMessage(channel: string, message: string): void {
       notificationQueue.add('risk-alert', data).catch((err) => {
         logger.error({ err }, '[Subscriber] Failed to enqueue notification job');
       });
-    } else if (channel.startsWith('te:engine:register') || channel.startsWith('te:engine:shutdown')) {
-      auditQueue.add('engine-lifecycle', data).catch((err) => {
-        logger.error({ err }, '[Subscriber] Failed to enqueue audit job');
+    } else if (channel === 'te:engine:register') {
+      EngineService.handleRegister(data).catch((err) => {
+        logger.error({ err }, '[Subscriber] Failed to handle engine register');
+      });
+      auditQueue.add('engine-lifecycle', { ...data, event: 'register' }).catch((err) => {
+        logger.error({ err }, '[Subscriber] Failed to enqueue engine register audit');
+      });
+    } else if (channel === 'te:engine:heartbeat') {
+      EngineService.handleHeartbeat(data).catch((err) => {
+        logger.error({ err }, '[Subscriber] Failed to handle engine heartbeat');
+      });
+    } else if (channel === 'te:engine:shutdown') {
+      EngineService.handleShutdown(data).catch((err) => {
+        logger.error({ err }, '[Subscriber] Failed to handle engine shutdown');
+      });
+      auditQueue.add('engine-lifecycle', { ...data, event: 'shutdown' }).catch((err) => {
+        logger.error({ err }, '[Subscriber] Failed to enqueue engine shutdown audit');
       });
     }
   } catch (err) {
@@ -92,9 +107,16 @@ function handleMessage(channel: string, message: string): void {
   }
 }
 
+/** Interval handle for heartbeat timeout checker. */
+let heartbeatCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+/** Check interval: every 10 seconds. */
+const HEARTBEAT_CHECK_INTERVAL_MS = 10_000;
+
 /**
  * Start the Redis Pub/Sub subscriber.
  * Subscribes to all TE channel patterns and relays events.
+ * Also starts the heartbeat timeout checker.
  */
 export async function startRedisSubscriber(): Promise<void> {
   // Use psubscribe for wildcard patterns, subscribe for exact channels
@@ -113,6 +135,13 @@ export async function startRedisSubscriber(): Promise<void> {
     handleMessage(channel, message);
   });
 
+  // Start background heartbeat timeout checker
+  heartbeatCheckInterval = setInterval(() => {
+    EngineService.checkStaleEngines().catch((err) => {
+      logger.error({ err }, '[Subscriber] Heartbeat check failed');
+    });
+  }, HEARTBEAT_CHECK_INTERVAL_MS);
+
   logger.info(
     `[Subscriber] Listening on ${exactChannels.length} channels + ${patternChannels.length} patterns`,
   );
@@ -123,6 +152,10 @@ export async function startRedisSubscriber(): Promise<void> {
  * Unsubscribes from all channels to prevent errors during shutdown.
  */
 export async function stopRedisSubscriber(): Promise<void> {
+  if (heartbeatCheckInterval) {
+    clearInterval(heartbeatCheckInterval);
+    heartbeatCheckInterval = null;
+  }
   redisSub.removeAllListeners('message');
   redisSub.removeAllListeners('pmessage');
   await redisSub.unsubscribe();

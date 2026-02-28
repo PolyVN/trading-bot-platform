@@ -7,6 +7,10 @@ import { auditQueue } from '../workers/index.js';
 import { REDIS_CHANNELS } from '../constants.js';
 import { buildSortObject, buildPaginatedResponse } from '../validation/common.js';
 import { NotFoundError, ForbiddenError, ConflictError } from '../lib/route-utils.js';
+import { logger } from '../lib/logger.js';
+
+/** Engines with no heartbeat for this many ms are marked offline. */
+const HEARTBEAT_TIMEOUT_MS = 30_000;
 
 interface EngineListQuery {
   page?: number;
@@ -97,5 +101,119 @@ export class EngineService {
     });
 
     return engine.toJSON();
+  }
+
+  /**
+   * Handle te:engine:register — upsert engine doc, set status='online'.
+   * Called from redis-subscriber when a TE instance starts up.
+   */
+  static async handleRegister(data: Record<string, unknown>): Promise<void> {
+    const { engineId, supportedExchanges, version, host, port } = data;
+    if (!engineId || !supportedExchanges || !version) {
+      logger.warn({ data }, '[EngineService] Invalid register payload, missing required fields');
+      return;
+    }
+
+    const now = new Date();
+    await Engine.findOneAndUpdate(
+      mongoFilter({ engineId }),
+      {
+        $set: {
+          engineId,
+          supportedExchanges,
+          version,
+          host: host ?? null,
+          port: port ?? null,
+          status: 'online',
+          startedAt: now,
+          lastHeartbeat: now,
+        },
+      },
+      { upsert: true },
+    );
+
+    logger.info({ engineId, supportedExchanges, version }, '[EngineService] Engine registered');
+  }
+
+  /**
+   * Handle te:engine:heartbeat — update lastHeartbeat + optional metrics.
+   * Ensures engine status is 'online' (recovers from stale timeout).
+   */
+  static async handleHeartbeat(data: Record<string, unknown>): Promise<void> {
+    const { engineId } = data;
+    if (!engineId) return;
+
+    const update: Record<string, unknown> = {
+      lastHeartbeat: new Date(),
+    };
+
+    // If heartbeat carries metrics or bot info, merge them
+    if (data.activeBotCount !== undefined) update.activeBotCount = data.activeBotCount;
+    if (data.activeBotIds !== undefined) update.activeBotIds = data.activeBotIds;
+    if (data.metrics) update.metrics = data.metrics;
+
+    // Re-mark online if previously timed out (but not if draining)
+    const result = await Engine.findOneAndUpdate(
+      mongoFilter({ engineId, status: { $ne: 'draining' } }),
+      { $set: { ...update, status: 'online' } },
+    );
+
+    // If engine is draining, still update heartbeat but don't change status
+    if (!result) {
+      await Engine.findOneAndUpdate(
+        mongoFilter({ engineId }),
+        { $set: update },
+      );
+    }
+  }
+
+  /**
+   * Handle te:engine:shutdown — mark engine offline.
+   */
+  static async handleShutdown(data: Record<string, unknown>): Promise<void> {
+    const { engineId } = data;
+    if (!engineId) return;
+
+    await Engine.findOneAndUpdate(
+      mongoFilter({ engineId }),
+      {
+        $set: {
+          status: 'offline',
+          activeBotCount: 0,
+          activeBotIds: [],
+          lastHeartbeat: new Date(),
+        },
+      },
+    );
+
+    logger.info({ engineId }, '[EngineService] Engine shut down');
+  }
+
+  /**
+   * Mark engines with stale heartbeats as offline.
+   * Called periodically (e.g., every 10s) from a background interval.
+   */
+  static async checkStaleEngines(): Promise<number> {
+    const cutoff = new Date(Date.now() - HEARTBEAT_TIMEOUT_MS);
+
+    const result = await Engine.updateMany(
+      mongoFilter({
+        status: { $in: ['online', 'draining'] },
+        lastHeartbeat: { $lt: cutoff },
+      }),
+      {
+        $set: {
+          status: 'offline',
+          activeBotCount: 0,
+          activeBotIds: [],
+        },
+      },
+    );
+
+    const count = result.modifiedCount;
+    if (count > 0) {
+      logger.warn({ count, cutoffMs: HEARTBEAT_TIMEOUT_MS }, '[EngineService] Marked stale engines offline');
+    }
+    return count;
   }
 }
