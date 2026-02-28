@@ -63,7 +63,7 @@ const botSchema = new Schema(
       type: new Schema({ message: String, timestamp: Date }, { _id: false }),
     },
     riskStopReason: { type: String },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: String },
   },
   {
     timestamps: true,

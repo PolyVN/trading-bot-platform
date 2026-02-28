@@ -3,16 +3,12 @@ import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { User } from '../models/User.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+import { authenticate, authorize, mongoFilter } from '../middleware/auth.js';
 import { blacklistToken, isTokenBlacklisted } from '../lib/token-blacklist.js';
 import { EXCHANGES } from '../constants.js';
 
 const SALT_ROUNDS = 12;
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
-
-// Helper for Mongoose 9 filter typing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const filter = (obj: Record<string, unknown>): any => obj;
 
 // --- Zod validation schemas ---
 
@@ -45,7 +41,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
     const { email, password } = parsed.data;
 
-    const user = await User.findOne(filter({ email: email.toLowerCase(), isActive: true }));
+    const user = await User.findOne(mongoFilter({ email: email.toLowerCase(), isActive: true }));
     if (!user) {
       return reply.status(401).send({ error: 'Invalid email or password' });
     }
@@ -113,7 +109,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const decoded: any = app.jwt.verify(token);
 
       // Re-fetch user to get latest role/permissions
-      const user = await User.findOne(filter({ userId: decoded.sub, isActive: true }));
+      const user = await User.findOne(mongoFilter({ userId: decoded.sub, isActive: true }));
       if (!user) {
         return reply.status(401).send({ error: 'User not found or inactive' });
       }
@@ -159,7 +155,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
    * GET /api/auth/me
    */
   app.get('/me', { preHandler: [authenticate] }, async (request, reply) => {
-    const user = await User.findOne(filter({ userId: request.authUser.sub }));
+    const user = await User.findOne(mongoFilter({ userId: request.authUser.sub }));
     if (!user) {
       return reply.status(404).send({ error: 'User not found' });
     }
@@ -207,7 +203,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       }
       const { email, password, role, allowedExchanges } = parsed.data;
 
-      const existing = await User.findOne(filter({ email: email.toLowerCase() }));
+      const existing = await User.findOne(mongoFilter({ email: email.toLowerCase() }));
       if (existing) {
         return reply.status(409).send({ error: 'User with this email already exists' });
       }
@@ -260,7 +256,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const user = await User.findOneAndUpdate(
-        filter({ userId: id }),
+        mongoFilter({ userId: id }),
         { $set: updates },
         { new: true },
       );
@@ -293,7 +289,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(400).send({ error: 'Cannot delete your own account' });
       }
 
-      const result = await User.findOneAndDelete(filter({ userId: id }));
+      const result = await User.findOneAndDelete(mongoFilter({ userId: id }));
       if (!result) {
         return reply.status(404).send({ error: 'User not found' });
       }

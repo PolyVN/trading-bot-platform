@@ -7,6 +7,14 @@ import fastifyCookie from '@fastify/cookie';
 import { config } from './config.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
+import { botRoutes } from './routes/bots.js';
+import { orderRoutes } from './routes/orders.js';
+import { tradeRoutes } from './routes/trades.js';
+import { walletRoutes } from './routes/wallets.js';
+import { positionRoutes } from './routes/positions.js';
+import { engineRoutes } from './routes/engines.js';
+import { exchangeRoutes } from './routes/exchanges.js';
+import { pnlRoutes } from './routes/pnl.js';
 import { metricsRoutes } from './lib/metrics.js';
 import { setupSocketIO } from './lib/socket.js';
 
@@ -49,6 +57,14 @@ export async function buildApp() {
   await app.register(healthRoutes, { prefix: '/api/system' });
   await app.register(metricsRoutes, { prefix: '/api/system' });
   await app.register(authRoutes, { prefix: '/api/auth' });
+  await app.register(botRoutes, { prefix: '/api/bots' });
+  await app.register(orderRoutes, { prefix: '/api/orders' });
+  await app.register(tradeRoutes, { prefix: '/api/trades' });
+  await app.register(walletRoutes, { prefix: '/api/wallets' });
+  await app.register(positionRoutes, { prefix: '/api/positions' });
+  await app.register(engineRoutes, { prefix: '/api/engines' });
+  await app.register(exchangeRoutes, { prefix: '/api/exchanges' });
+  await app.register(pnlRoutes, { prefix: '/api/pnl' });
 
   return app;
 }
