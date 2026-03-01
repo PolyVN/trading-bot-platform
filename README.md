@@ -140,6 +140,18 @@ curl http://localhost:3001/api/engines              # should list registered TEs
 See [`packages/docker/`](packages/docker/) for `.env.example` templates per service (infrastructure config only — exchange credentials are managed via CMS).
 See [deployment guide](https://github.com/PolyVN/trading-docs/blob/main/06-infrastructure/deployment.md) for full setup, firewall rules, and reverse proxy config.
 
+## Default Admin Account
+
+On first startup, the CMS Backend automatically seeds a default admin user:
+
+| Field | Value |
+|-------|-------|
+| Email | `admin@polyvn.com` |
+| Password | `changeme` |
+| Role | `admin` |
+
+> **Important**: Change the default password after first login. To customize the seed credentials, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables before first startup.
+
 ## Creating Your First Bot
 
 After all services are running, create a bot via the CMS API (or use the dashboard at `http://localhost:3000`):
@@ -148,8 +160,8 @@ After all services are running, create a bot via the CMS API (or use the dashboa
 # 1. Login to get a JWT token
 TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "your-password"}' \
-  | jq -r '.token')
+  -d '{"email": "admin@polyvn.com", "password": "changeme"}' \
+  | jq -r '.accessToken')
 
 # 2. Register a wallet (Polymarket example)
 WALLET_ID=$(curl -s -X POST http://localhost:3001/api/wallets \
